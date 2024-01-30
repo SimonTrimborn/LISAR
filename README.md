@@ -1,5 +1,5 @@
 ## LISAR: Influential assets in Large-Scale Vector AutoRegressive Models
-This repository contains the code which implements the algorithm for the LISAR model introduced in the paper [*"Influential assets in Large-Scale Vector AutoRegressive Models"*](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4619531) as well as the high-frequency data for the financial companies contained in the S$&P100 used in the analysis of said paper. 
+This repository contains the code which implements the algorithm for the LISAR model introduced in the paper [*"Influential assets in Large-Scale Vector AutoRegressive Models"*](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4619531) as well as the high-frequency data for the financial companies contained in the S&P100 used in the analysis of said paper. 
 
 ### Code
 
