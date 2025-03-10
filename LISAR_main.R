@@ -86,7 +86,11 @@ d = 1
 dat = stock.subset[stock.date[d]]
 dat = dat[ , colSums(is.na(dat)) != nrow(dat)] 
 dat = na.omit(na.locf(diff(log(dat))))
-dat = scale(dat)
+dat = dat["T09:45/T15:45",]
+dat = dat - colMeans(dat) 
+B = apply(dat, 2, function (x) {a = try(garchFit(data = x)@sigma.t, silent = TRUE); 
+if (class(a) == "try-error") {rep(sd(x), length(x))} else {a}})
+dat = dat / B
 
 TTs = nrow(dat)
 
