@@ -29,7 +29,7 @@
 
 rm(list=ls(all=TRUE))
 
-libraries = c("xts")
+libraries = c("xts", "fGarch")
 lapply(libraries, function(x) if (!(x %in% installed.packages())) {
   install.packages(x)
 })
