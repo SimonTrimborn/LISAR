@@ -160,3 +160,52 @@ FistaLASSOK.mixed.pen <- function(B, Y, Z, gam, eps) {
   }
   return(list(B = B, OV = OVF, iters = q))
 }
+
+
+FistaElasticNetK.mixed.pen <- function(B, Y, Z, gam, eps, delta.elastic.net) {
+  OVF <- c()
+  k <- nrow(Y)
+  BOLD <- B
+  BOLDOLD <- B
+  tk <- 1/max(Mod(eigen(Z %*% t(Z), only.values = T)$values))
+  q = 1
+  for (i in 1:k) {
+    threshold <- 10 * eps
+    j = 1
+    while (threshold > eps) {
+      v <- matrix(BOLD[i,] + (j - 2)/(j + 1) * (BOLD[i,] - BOLDOLD[i,]), nrow = 1)
+      B[i,] <- LASSO(v + tk * ((Y[i,] - v %*% Z) %*% t(Z) - gam[i,] * (1 - delta.elastic.net) * v ), gam[i,] * delta.elastic.net * tk) 
+      threshold <- max(abs(B[i,] - v)/(1 + v))
+      OVF[q] <- max(abs(B[i,] - v)/(1 + v))
+      BOLDOLD[i,] <- BOLD[i,]
+      BOLD[i,] <- B[i,]
+      j = j + 1 # number of iterations for each row
+      q = q + 1 # total number of iterations
+    }
+  }
+  return(list(B = B, OV = OVF, iters = q))
+}
+
+FistaElasticNetK <- function(B, Y, Z, gam, eps, delta.elastic.net) {
+  OVF <- c()
+  k <- nrow(Y)
+  BOLD <- B
+  BOLDOLD <- B
+  tk <- 1/max(Mod(eigen(Z %*% t(Z), only.values = T)$values))
+  q = 1
+  for (i in 1:k) {
+    threshold <- 10 * eps
+    j = 1
+    while (threshold > eps) {
+      v <- matrix(BOLD[i,] + (j - 2)/(j + 1) * (BOLD[i,] - BOLDOLD[i,]), nrow = 1)
+      B[i,] <- LASSO(v + tk * ((Y[i,] - v %*% Z) %*% t(Z) - gam * (1 - delta.elastic.net) * v ), gam * delta.elastic.net * tk) 
+      threshold <- max(abs(B[i,] - v)/(1 + v))
+      OVF[q] <- max(abs(B[i,] - v)/(1 + v))
+      BOLDOLD[i,] <- BOLD[i,]
+      BOLD[i,] <- B[i,]
+      j = j + 1 # number of iterations for each row
+      q = q + 1 # total number of iterations
+    }
+  }
+  return(list(B = B, OV = OVF, iters = q))
+}

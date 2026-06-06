@@ -1,4 +1,4 @@
-# Algorithm to estimate LISAR model with LASSO, SCAD and Adaptive LASSO penalty
+# Algorithm to estimate LISAR model with LASSO, SCAD, Adaptive LASSO and Elastic Net penalty
 #
 ##############
 # For details about the models and algorithms, please see:
@@ -18,6 +18,7 @@
 # 'a.pen' : Tapering off parameter for SCAD penalty
 # 'alpha.pens' : Vector or single number specifying the mixing parameters alpha. Shall be between (0,1). See paper for details
 # 'gamma.pens' : Vector or single number specifying the gamma parameter for Adaptive LASSO. Shall be larger 0. 
+# 'delta.elastic.net.pens': Vector or single number specifying the delta mixing parameter for Elastic Net. Shall be between [0,1]. 
 # 'lambda1_seq' : Number between (0,1) indicating the tapering off parameter for the lambda sequence for the lag penalization
 # 'lambda2_seq' : Number between (0,1) indicating the tapering off parameter for the lambda sequence for the column penalization
 # 'lambda3_seq' : Number between (0,1) indicating the tapering off parameter for the lambda sequence for the individual parameter penalization
@@ -40,11 +41,12 @@ source("LISAR_helper_functions.R")
 source("LISAR_SCAD.R")
 source("LISAR_LASSO.R")
 source("LISAR_AdapLASSO.R")
+source("LISAR_ElasticNet.R")
 source("LISAR_alpha_select.R")
 source("LISAR_LASSO2.R")
 source("LISAR_evaluation.R")
 
-# Choose model: LISAR.LASSO, LISAR.SCAD, LISAR.Adap.LASSO
+# Choose model: LISAR.LASSO, LISAR.SCAD, LISAR.Adap.LASSO, LISAR.Elastic.Net
 Model = "LISAR.LASSO" 
 # Choose evaluation criteria for models: MSFE, AIC, BIC
 Select = "MSFE"
@@ -55,6 +57,8 @@ reoptim = FALSE
 Lags = 4 
 # Tapering off parameter for SCAD
 a.pen = 3.7
+# Mixing parameters for Elastic Net
+delta.elastic.net.pens = c(0.3, 0.5, 0.7)
 # Mixing parameter to assign stronger/weaker regularization to non-/influencers. 
 # Can be a vector or single number. Shall be between (0,1)
 alpha.pens = c(0.3, 0.5, 0.7)
@@ -329,7 +333,77 @@ if (Model == "LISAR.Adap.LASSO") {
   store.time2 - store.time1
 }
 
-EvaluateModel = EvaluateLossFunction(Select, Model, store_model_alpha_select, alpha.pens, gamma.pens, 
+##########################
+### LISAR Elastic Net
+##########################
+if (Model == "LISAR.Elastic.Net") {
+  store.time1 = Sys.time()
+  store_model_alpha_select = list()
+  
+  for (elastic.net.loop in 1:length(delta.elastic.net.pens)) {
+    delta.elastic.net = delta.elastic.net.pens[elastic.net.loop]
+    store_model_alpha = list()
+    for (k in 1:length(alpha.pens)) {
+      alpha_opt = alpha.pens[k]
+      
+      message(paste0("START estimation ", Model, " with alpha = ", alpha_opt, " and delta = ", delta.elastic.net))
+      pb = txtProgressBar(min = 0, max = length(lambda1) * length(lambda2)  * length(lambda3), initial = 0, style=3)
+      store_model_alpha[[k]] = LISAR_ElasticNet(N=N, TT=TT, Lags = Lags, Ydata = Ydata, lambda1 = lambda1, lambda2 = lambda2, lambda3 = lambda3, delta.elastic.net = delta.elastic.net, eps1 = eps1, alpha.pen=alpha_opt, reshape = FALSE)
+      close(pb)
+      message(paste0("DONE estimation ", Model, " with alpha = ", alpha_opt, " and delta = ", delta.elastic.net))
+      
+      lambda1_new = lambda1
+      lambda2_new = lambda2
+      lambda3_new = lambda3
+      lambdas_and_opt_model = LambdaSelect(Select, store_model_alpha[[k]], Ydata_eval, Model)
+      lambdas_upper_lower = lambdas_and_opt_model[[1]]
+      new_opt_model = lambdas_and_opt_model[[2]]
+      last_opt_model = lapply(new_opt_model, function(x) x + 1)
+      lambda1_new = seq(lambda1_new[lambdas_upper_lower[[1]][1]], lambda1_new[lambdas_upper_lower[[1]][2]], length.out = 10)
+      lambda2_new = seq(lambda2_new[lambdas_upper_lower[[2]][1]], lambda2_new[lambdas_upper_lower[[2]][2]], length.out = 10)
+      lambda3_new = seq(lambda3_new[lambdas_upper_lower[[3]][1]], lambda3_new[lambdas_upper_lower[[3]][2]], length.out = 10)
+      
+      # Refine optimal lambda combination
+      if (reoptim == TRUE) {
+        message(paste0("START refined estimation ", Model, " with alpha = ", alpha_opt, " and delta = ", delta.elastic.net))
+        while (any((unlist(last_opt_model) - unlist(new_opt_model)) > eps2)) {
+          
+          pb = txtProgressBar(min = 0, max = length(lambda1_new) * length(lambda2_new)  * length(lambda3_new), initial = 0, style=3) 
+          store_model_alpha[[k]] = LISAR_ElasticNet(N=N, TT=TT, Lags = Lags, Ydata = Ydata, 
+                                                   lambda1 = lambda1_new, 
+                                                   lambda2 = lambda2_new, 
+                                                   lambda3 = lambda3_new, delta.elastic.net = delta.elastic.net, eps1 = eps1, 
+                                                   alpha.pen=alpha_opt, 
+                                                   reshape = TRUE)
+          close(pb)
+          
+          lambdas_and_opt_model = LambdaSelect(Select, store_model_alpha[[k]], Ydata_eval, Model)
+          lambdas_upper_lower = lambdas_and_opt_model[[1]]
+          
+          lambda1_select = lambdas_and_opt_model[[3]][[1]]
+          lambda2_select = lambdas_and_opt_model[[3]][[2]]
+          lambda3_select = lambdas_and_opt_model[[3]][[3]]
+          
+          lambda1_new = seq(lambda1_new[lambdas_upper_lower[[1]][1]], lambda1_new[lambdas_upper_lower[[1]][2]], length.out = 10)
+          lambda2_new = seq(lambda2_new[lambdas_upper_lower[[2]][1]], lambda2_new[lambdas_upper_lower[[2]][2]], length.out = 10)
+          lambda3_new = seq(lambda3_new[lambdas_upper_lower[[3]][1]], lambda3_new[lambdas_upper_lower[[3]][2]], length.out = 10)
+          
+          last_opt_model = new_opt_model
+          new_opt_model = lambdas_and_opt_model[[2]]
+        }
+        message(paste0("DONE refined estimation ", Model, " with alpha = ", alpha_opt, " and delta = ", delta.elastic.net))
+      }
+    }
+    
+    alpha_new = AlphaSelect(Select, store_model_alpha, Ydata_eval, alpha.pens)
+    which_model = which(alpha.pens == alpha_new[[1]])
+    store_model_alpha_select[[elastic.net.loop]] = store_model_alpha[[which_model]]
+  }
+  store.time2 = Sys.time()
+  store.time2 - store.time1
+}
+
+EvaluateModel = EvaluateLossFunction(Select, Model, store_model_alpha_select, alpha.pens, gamma.pens, delta.elastic.net.pens, 
                                    Ydata_eval, Ydata_ofs, 
                                    store.time2, 
                                    store.time1)
